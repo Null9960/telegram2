@@ -31,23 +31,43 @@ if ! python3 -c "import flask" &>/dev/null; then
     python3 -m pip install flask
 fi
 
-# التحقق من وجود سجل الأخطاء
-LOG_FILE="error_log.txt"
-if [ ! -f "$LOG_FILE" ]; then
-    touch $LOG_FILE
-    echo "📄 تم إنشاء ملف سجل الأخطاء: $LOG_FILE"
-fi
+# 🔹 **محاولة العثور على بورت مفتوح تلقائيًا**
+start_port=1024
+end_port=65535
+port_found=false
 
-# 🔹 **محاولة العثور على بورت مفتوح تلقائيًا بدون حد أقصى**
-port=0
-while true; do
-    if ! netstat -tuln | grep -q ":$port "; then
+echo "🔍 البحث عن منفذ مفتوح بين $start_port و $end_port..."
+
+for ((port=$start_port; port<=$end_port; port++)); do
+    # محاولة معرفة إذا كان المنفذ مفتوحًا
+    if command -v ss &>/dev/null; then
+        if ! ss -tuln | grep -q ":$port "; then
+            export PORT=$port
+            port_found=true
+            echo "✅ تم العثور على بورت متاح: $PORT"
+            break
+        fi
+    elif command -v netstat &>/dev/null; then
+        if ! netstat -tuln | grep -q ":$port "; then
+            export PORT=$port
+            port_found=true
+            echo "✅ تم العثور على بورت متاح: $PORT"
+            break
+        fi
+    else
+        # إذا لم يكن ss أو netstat متاحًا، نستخدم طريقة بسيطة لتأكيد المنفذ
+        echo "⚠️ لا يمكن العثور على ss أو netstat. التحقق من المنفذ بطريقة بديلة..."
+        # افتراض أن المنفذ غير مشغول (للتجربة)
         export PORT=$port
-        echo "✅ تم العثور على بورت متاح: $PORT"
+        port_found=true
         break
     fi
-    ((port++))
 done
+
+if [ "$port_found" = false ]; then
+    echo "❌ لم يتم العثور على بورت متاح في النطاق المحدد."
+    exit 1
+fi
 
 # تحديث ملف البيئة
 echo "PORT=$PORT" > .env
@@ -59,25 +79,6 @@ echo "#!/bin/bash" > start.sh
 echo "exec gunicorn app:app --bind 0.0.0.0:\${PORT}" >> start.sh
 chmod +x start.sh
 echo "✅ تم تحديث Start Command"
-
-# التحقق من وجود مشاكل متكررة في السجل
-if grep -q "gunicorn: command not found" $LOG_FILE; then
-    echo "⚠️ خطأ متكرر: gunicorn غير موجود."
-    echo "📄 جاري تثبيت gunicorn..."
-    python3 -m pip install gunicorn
-fi
-
-# إضافة ذكاء اصطناعي بسيط لتحليل الأخطاء
-function analyze_errors() {
-    error_count=$(grep -c "ERROR" $LOG_FILE)
-    if [ "$error_count" -gt 5 ]; then
-        echo "⚠️ تم اكتشاف أخطاء متكررة. جارٍ استخدام حلول بديلة..."
-        # إضافة منطق بديل هنا
-    fi
-}
-
-# تشغيل تحليل الأخطاء
-analyze_errors
 
 # تشغيل التطبيق
 echo "🚀 بدء التطبيق..."
