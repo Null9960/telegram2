@@ -31,18 +31,25 @@ if ! python3 -c "import flask" &>/dev/null; then
     python3 -m pip install flask
 fi
 
-# اكتشاف المنفذ المتاح وتحديث البيئة
-export PORT=${PORT:-10000}
-echo "🔄 استخدام المنفذ: $PORT"
+# 🔹 **محاولة العثور على بورت مفتوح تلقائيًا بدون حد أقصى**
+port=0
+while true; do
+    if ! netstat -tuln | grep -q ":$port "; then
+        export PORT=$port
+        echo "✅ تم العثور على بورت متاح: $PORT"
+        break
+    fi
+    ((port++))
+done
 
-# إنشاء ملف البيئة
+# تحديث ملف البيئة
 echo "PORT=$PORT" > .env
 echo "✅ تم تحديث ملف .env بالمنفذ $PORT"
 
-# إنشاء start.sh لبدء التطبيق تلقائيًا
+# 🔹 **تحديث Start Command**
 echo "🔄 تحديث Start Command ..."
 echo "#!/bin/bash" > start.sh
-echo "exec gunicorn app:app --bind 0.0.0.0:\${PORT:-10000}" >> start.sh
+echo "exec gunicorn app:app --bind 0.0.0.0:\${PORT}" >> start.sh
 chmod +x start.sh
 echo "✅ تم تحديث Start Command"
 
